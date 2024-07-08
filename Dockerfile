@@ -1,29 +1,48 @@
-# For more information, please refer to https://aka.ms/vscode-docker-python
-FROM python:3.10-slim
+# using ubuntu LTS version
+FROM ubuntu:20.04 AS builder-image
 
-EXPOSE 8000
+# avoid stuck build due to user prompt
+ARG DEBIAN_FRONTEND=noninteractive
 
-# Keeps Python from generating .pyc files in the container
-ENV PYTHONDONTWRITEBYTECODE=1
+RUN apt-get update && apt-get install --no-install-recommends -y python3.9 python3.9-dev python3.9-venv python3-pip python3-wheel build-essential && \
+	apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Turns off buffering for easier container logging
-ENV PYTHONUNBUFFERED=1
+# create and activate virtual environment
+# using final folder name to avoid path issues with packages
+RUN python3.9 -m venv /home/myuser/venv
+ENV PATH="/home/myuser/venv/bin:$PATH"
+
+#USER root
 
 # update repos
-RUN apt-get update && apt-get install -y g++
-RUN pip install --upgrade pip
+# RUN apt-get update && apt-get install -y python3 python3-pip g++ cron 
+# RUN apt-get update && apt-get install -y python3.9 python3.9-dev g++ cron 
+
+RUN apt-get update && apt-get install --no-install-recommends -y python3.9 python3.9-dev python3.9-venv python3-pip python3-wheel build-essential cron && \
+	apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Install pip requirements
 COPY requirements.txt .
-RUN python -m pip install -r requirements.txt
+RUN pip install -r requirements.txt
+#RUN python -m pip install -r requirements.txt
 
 WORKDIR /app
-COPY . /app
+COPY /app /app
 
-# Creates a non-root user with an explicit UID and adds permission to access the /app folder
-# For more info, please refer to https://aka.ms/vscode-docker-python-configure-containers
-RUN adduser -u 5678 --disabled-password --gecos "" appuser && chown -R appuser /app
-USER appuser
+# map volume
+VOLUME /app2
 
-# During debugging, this entry point will be overridden. For more information, please refer to https://aka.ms/vscode-docker-python-debug
-CMD ["gunicorn", "--bind", "0.0.0.0:8000", "-k", "uvicorn.workers.UvicornWorker", "app:app"]
+
+COPY crontab_isert /etc/cron.d/crontab_isert
+# Give execution rights on the cron job
+RUN chmod 0644 /etc/cron.d/crontab_isert
+
+# Create the log file to be able to run tail
+RUN touch /var/log/cron.log
+ 
+# Apply the cron job
+RUN crontab /etc/cron.d/crontab_isert
+
+# Run the command on container startup
+CMD cron && tail -f /var/log/cron.log
+

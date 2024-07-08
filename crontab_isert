@@ -1,0 +1,2 @@
+*/2 * * * * python /app/app.py >> /var/log/cron.log
+# empty line requered
